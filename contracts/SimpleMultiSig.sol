@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.8;
 
 contract SimpleMultiSig {
 
@@ -25,12 +25,12 @@ bytes32 constant SALT = 0x251543af6a222378665a76fe38dbceae4871a070b7fdaf5c6c30cf
   bytes32 DOMAIN_SEPARATOR;          // hash for EIP712, computed from contract address
   
   // Note that owners_ must be strictly increasing, in order to prevent duplicates
-  constructor(uint threshold_, address[] owners_, uint chainId) public {
-    require(owners_.length <= 10 && threshold_ <= owners_.length && threshold_ > 0);
+  constructor(uint threshold_, address[] memory owners_, uint chainId) public {
+    require(owners_.length <= 10 && threshold_ <= owners_.length && threshold_ > 0, "Invalid Owner");
 
     address lastAdd = address(0);
     for (uint i = 0; i < owners_.length; i++) {
-      require(owners_[i] > lastAdd);
+      require(owners_[i] > lastAdd, "Owner must be in increasing order");
       isOwner[owners_[i]] = true;
       lastAdd = owners_[i];
     }
@@ -46,7 +46,19 @@ bytes32 constant SALT = 0x251543af6a222378665a76fe38dbceae4871a070b7fdaf5c6c30cf
   }
 
   // Note that address recovered from signatures must be strictly increasing, in order to prevent duplicates
-  function execute(uint8[] sigV, bytes32[] sigR, bytes32[] sigS, address destination, uint value, bytes data, address executor, uint gasLimit) public {
+  function executeCall(address destination, uint value, bytes memory data, address executor, uint gasLimit) public view returns (bytes memory, bytes memory, bytes32, bytes32, bytes32) {
+    require(executor == msg.sender || executor == address(0));
+
+    // EIP712 scheme: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md
+    bytes32 txInputHash = keccak256(abi.encode(TXTYPE_HASH, destination, value, keccak256(data), nonce, executor, gasLimit));
+    bytes32 totalHash = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, txInputHash));
+
+    return (abi.encode(TXTYPE_HASH, destination, value, keccak256(data), nonce, executor, gasLimit), abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, txInputHash), keccak256(data), txInputHash, totalHash);
+  }
+
+
+  // Note that address recovered from signatures must be strictly increasing, in order to prevent duplicates
+  function execute(uint8[] memory sigV, bytes32[] memory sigR, bytes32[] memory sigS, address destination, uint value, bytes memory data, address executor, uint gasLimit) public {
     require(sigR.length == threshold);
     require(sigR.length == sigS.length && sigR.length == sigV.length);
     require(executor == msg.sender || executor == address(0));
