@@ -2,11 +2,10 @@ pragma solidity ^0.5.8;
 
 // This contract is only used for testing purposes.
 contract TestRegistry {
+    mapping(address => uint256) public registry;
 
-  mapping(address => uint) public registry;
-
-  function register(uint x) payable public {
-    registry[msg.sender] = x;
-  }
+    function register(uint256 x) public payable {
+        registry[msg.sender] = x;
+    }
 
 }
